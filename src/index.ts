@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 // src/index.ts
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
@@ -771,118 +772,6 @@ const server = new McpServer({
   },
 });
 
-// Tool 1: Browse - Navigate and snapshot (reuses a persistent profile by default)
-server.tool(
-  "browse",
-  "Browse to a URL (reuses a persistent profile by default) and return the page title and visible text",
-  {
-    url: z.string().url().describe("The URL to navigate to"),
-    headless: z.boolean().default(false).describe("Whether to run the browser in headless mode"),
-    waitFor: z.number().default(1000).describe("Time to wait after page load (milliseconds)"),
-    waitUntil: z.enum(["load", "domcontentloaded", "networkidle"]).default("load").describe("Navigation wait condition"),
-    profile: z
-      .string()
-      .default("default")
-      .describe("Persistent profile name (reused across calls and restarts; pass different names for multi-account isolation)"),
-    isolated: z
-      .boolean()
-      .default(false)
-      .describe("Start a temporary isolated session (ignores profile; does not persist)"),
-    browserId: z
-      .string()
-      .optional()
-      .describe("Reuse an existing browserId instead of profile/isolated (useful for re-snapshotting the same page)"),
-    newPage: z.boolean().default(false).describe("Open a new tab/page in the chosen session instead of reusing the active page")
-  },
-  async ({
-    url,
-    headless,
-    waitFor,
-    waitUntil,
-    profile,
-    isolated,
-    browserId,
-    newPage
-  }: {
-    url: string;
-    headless: boolean;
-    waitFor: number;
-    waitUntil: "load" | "domcontentloaded" | "networkidle";
-    profile: string;
-    isolated: boolean;
-    browserId?: string;
-    newPage: boolean;
-  }) => {
-    try {
-      const launchArgs = [
-        "--no-sandbox",
-        "--disable-setuid-sandbox",
-        "--disable-dev-shm-usage",
-        "--disable-accelerated-2d-canvas",
-        "--no-first-run",
-        "--no-zygote",
-        "--disable-gpu"
-      ];
-
-      const session = await getOrCreateSession({
-        browserId,
-        profile,
-        isolated,
-        headless,
-        launchArgs
-      });
-
-      const resolvedBrowserId = session.browserId;
-      const instance = session.instance;
-      const wasReused = session.wasReused;
-
-      let pageId: string;
-      let page: Page;
-      if (newPage) {
-        page = await instance.context.newPage();
-        pageId = registerPage(instance, page);
-      } else {
-        const resolved = getPage(resolvedBrowserId);
-        pageId = resolved.pageId;
-        page = resolved.page;
-      }
-
-      await page.goto(url, { waitUntil });
-      await page.waitForTimeout(waitFor);
-      
-      // Get page title
-      const title = await page.title();
-      
-      // Extract visible text with stealth (isolated context)
-      // This ensures the page doesn't detect us using Runtime.evaluate
-      const visibleText = await page.evaluate(`
-        Array.from(document.querySelectorAll('body, body *'))
-          .filter(element => {
-            const style = window.getComputedStyle(element);
-            return style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0';
-          })
-          .map(element => element.textContent)
-          .filter(text => text && text.trim().length > 0)
-          .join('\\n')
-      `) as string;
-      
-      // Take a screenshot
-      const screenshotPath = path.join(TEMP_DIR, `screenshot-${pageId}-${Date.now()}.png`);
-      await page.screenshot({ path: screenshotPath });
-      
-      return pwOk(
-        `Successfully browsed to: ${url}\n\nPage Title: ${title}\n\nVisible Text Preview:\n${visibleText.substring(0, 1500)}${
-          visibleText.length > 1500 ? "..." : ""
-        }\n\nBrowser ID: ${resolvedBrowserId}\nPage ID: ${pageId}\nPersistent Profile: ${
-          instance.isPersistent ? instance.profile : "no"
-        }\nReused Session: ${wasReused}\nScreenshot saved to: ${screenshotPath}`
-      );
-    } catch (error) {
-      return pwError("Failed to browse", error);
-    }
-  }
-);
-
 // Tool: browser_open - Playwright MCP compatible "open URL" helper (best-effort)
 server.tool(
   "browser_open",
@@ -1058,54 +947,6 @@ server.tool(
       return pwOk(`Browser ID: ${resolvedBrowserId}`, { tabs: await renderTabs() });
     } catch (error) {
       return pwError("Failed to list tabs", error);
-    }
-  }
-);
-
-// Tool 1b: Navigate - Reuse an existing page and go to a new URL
-server.tool(
-  "navigate",
-  "Navigate an existing page to a new URL (preserves login/session state)",
-  {
-    browserId: z.string().describe("Browser ID from a previous browse operation"),
-    pageId: z.string().optional().describe("Optional Page ID (defaults to the first page in the browser)"),
-    url: z.string().url().describe("The URL to navigate to"),
-    waitFor: z.number().default(1000).describe("Time to wait after navigation (milliseconds)"),
-    waitUntil: z.enum(["load", "domcontentloaded", "networkidle"]).default("load").describe("Navigation wait condition")
-  },
-  async ({
-    browserId,
-    pageId,
-    url,
-    waitFor,
-    waitUntil
-  }: {
-    browserId: string;
-    pageId?: string;
-    url: string;
-    waitFor: number;
-    waitUntil: "load" | "domcontentloaded" | "networkidle";
-  }) => {
-    try {
-      const resolved = getPage(browserId, pageId);
-      const page = resolved.page;
-
-      const response = await page.goto(url, { waitUntil });
-      await page.waitForTimeout(waitFor);
-
-      const title = await page.title();
-      const currentUrl = page.url();
-
-      const screenshotPath = path.join(TEMP_DIR, `screenshot-${resolved.pageId}-${Date.now()}.png`);
-      await page.screenshot({ path: screenshotPath });
-
-      return pwOk(
-        `Navigated to: ${url}\n\nCurrent URL: ${currentUrl}\nPage Title: ${title}\nStatus: ${
-          response ? response.status() : "unknown"
-        }\n\nBrowser ID: ${browserId}\nPage ID: ${resolved.pageId}\nScreenshot saved to: ${screenshotPath}`
-      );
-    } catch (error) {
-      return pwError("Failed to navigate", error);
     }
   }
 );
@@ -3031,41 +2872,12 @@ server.tool(
   }
 );
 
-// Tool 1c: Execute Script - Run custom JavaScript in the page context
-server.tool(
-  "execute_script",
-  "Execute JavaScript in the page context and return the result (use `return` to return a value; `await` is allowed)",
-  {
-    browserId: z.string().describe("Browser ID from a previous browse operation"),
-    pageId: z.string().optional().describe("Optional Page ID (defaults to the first page in the browser)"),
-    code: z.string().describe("JavaScript snippet (function body). Example: `return localStorage.getItem('accessToken')`")
-  },
-  async ({ browserId, pageId, code }: { browserId: string; pageId?: string; code: string }) => {
-    try {
-      const resolved = getPage(browserId, pageId);
-      const page = resolved.page;
-
-      const wrapped = `(async () => { ${code}\n})()`;
-      const result = (await page.evaluate(wrapped)) as unknown;
-
-      return pwOk(
-        `Script executed successfully.\n\nBrowser ID: ${browserId}\nPage ID: ${resolved.pageId}\nCurrent URL: ${page.url()}\n\nResult:\n${formatEvalResult(
-          result
-        )}`,
-        { code }
-      );
-    } catch (error) {
-      return pwError("Failed to execute script", error);
-    }
-  }
-);
-
 // Tool 1d: Request - Call HTTP APIs using the page's browser context (cookies/session preserved, no CORS)
 server.tool(
   "request",
   "Send an HTTP request using the page's browser context (preserves cookies/session) and return JSON/text response",
   {
-    browserId: z.string().describe("Browser ID from a previous browse operation"),
+    browserId: z.string().describe("Browser ID from a previous browser_* operation"),
     pageId: z.string().optional().describe("Optional Page ID (defaults to the first page in the browser)"),
     url: z.string().url().describe("Request URL"),
     method: z
@@ -3140,7 +2952,7 @@ server.tool(
   "wait_for_response",
   "Wait for a network response matching a URL substring and return its JSON/text body",
   {
-    browserId: z.string().describe("Browser ID from a previous browse operation"),
+    browserId: z.string().describe("Browser ID from a previous browser_* operation"),
     pageId: z.string().optional().describe("Optional Page ID (defaults to the first page in the browser)"),
     urlContains: z.string().describe("Substring to match against response URL"),
     timeoutMs: z.number().default(30000).describe("Timeout (milliseconds)"),
@@ -3183,170 +2995,6 @@ server.tool(
       );
     } catch (error) {
       return pwError("Failed to wait for response", error);
-    }
-  }
-);
-
-// Tool 2: Interact - Perform simple interactions on a page
-server.tool(
-  "interact",
-  "Perform simple interactions on a page",
-  {
-    browserId: z.string().describe("Browser ID from a previous browse operation"),
-    pageId: z.string().optional().describe("Optional Page ID (defaults to the active page)"),
-    action: z.enum(["click", "fill", "select"]).describe("The type of interaction to perform"),
-    selector: z.string().describe("CSS selector for the element to interact with"),
-    value: z.string().optional().describe("Value for fill/select actions")
-  },
-  async ({ browserId, pageId, action, selector, value }: { 
-    browserId: string; 
-    pageId?: string; 
-    action: "click" | "fill" | "select"; 
-    selector: string; 
-    value?: string 
-  }) => {
-    try {
-      const resolved = getPage(browserId, pageId);
-      const page = resolved.page;
-      
-      // Perform the requested action
-      let actionResult = '';
-      switch (action) {
-        case "click":
-          await page.click(selector);
-          actionResult = `Clicked on element: ${selector}`;
-          break;
-        case "fill":
-          if (!value) {
-            throw new Error("Value is required for fill action");
-          }
-          await page.fill(selector, value);
-          actionResult = `Filled element ${selector} with value: ${value}`;
-          break;
-        case "select":
-          if (!value) {
-            throw new Error("Value is required for select action");
-          }
-          await page.selectOption(selector, value);
-          actionResult = `Selected option ${value} in element: ${selector}`;
-          break;
-      }
-      
-      // Wait a moment for any results of the interaction
-      await page.waitForTimeout(1000);
-      
-      // Take a screenshot of the result
-      const screenshotPath = path.join(TEMP_DIR, `screenshot-${resolved.pageId}-${Date.now()}.png`);
-      await page.screenshot({ path: screenshotPath });
-      
-      // Get current URL after interaction
-      const currentUrl = page.url();
-      
-      return pwOk(`Successfully performed action.\n\n${actionResult}\n\nCurrent URL: ${currentUrl}\n\nScreenshot saved to: ${screenshotPath}`);
-    } catch (error) {
-      return pwError("Failed to interact with page", error);
-    }
-  }
-);
-
-// Tool 3: Extract - Get information from the current page
-server.tool(
-  "extract",
-  "Extract information from the current page as text, html, or screenshot",
-  {
-    browserId: z.string().describe("Browser ID from a previous browse operation"),
-    pageId: z.string().optional().describe("Optional Page ID (defaults to the active page)"),
-    type: z.enum(["text", "html", "screenshot"]).describe("Type of content to extract")
-  },
-  async ({ browserId, pageId, type }: { 
-    browserId: string; 
-    pageId?: string; 
-    type: "text" | "html" | "screenshot" 
-  }) => {
-    try {
-      const resolved = getPage(browserId, pageId);
-      const page = resolved.page;
-      
-      let extractedContent = '';
-      let screenshotPath = '';
-      let images: Array<{ mimeType: string; data: Buffer }> = [];
-      
-      // Extract content based on requested type
-      switch (type) {
-        case "text":
-          // Get visible text with stealth isolation
-          extractedContent = await page.evaluate(`
-            Array.from(document.querySelectorAll('body, body *'))
-              .filter(element => {
-                const style = window.getComputedStyle(element);
-                return style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0';
-              })
-              .map(element => element.textContent)
-              .filter(text => text && text.trim().length > 0)
-              .join('\\n')
-          `) as string;
-          break;
-        case "html":
-          // Get HTML content
-          extractedContent = await page.content();
-          break;
-        case "screenshot":
-          // Take a screenshot
-          screenshotPath = path.join(TEMP_DIR, `screenshot-${resolved.pageId}-${Date.now()}.png`);
-          const buffer = (await page.screenshot()) as Buffer;
-          await fs.writeFile(screenshotPath, buffer);
-          images = [{ mimeType: "image/png", data: scaleImageToFitMessage(buffer, "png") }];
-          extractedContent = `Screenshot saved to: ${screenshotPath}`;
-          break;
-      }
-      
-      if (type === "screenshot") return pwOk(extractedContent, { images });
-
-      const text =
-        type === "text"
-          ? extractedContent.substring(0, 2000) + (extractedContent.length > 2000 ? "..." : "")
-          : `Extracted HTML content (${extractedContent.length} characters). First 100 characters:\n${extractedContent.substring(0, 100)}...`;
-      return pwOk(text);
-    } catch (error) {
-      return pwError("Failed to extract content", error);
-    }
-  }
-);
-
-// Tool 4: Close - Close browser to free resources
-server.tool(
-  "close",
-  "Close browser to free resources",
-  {
-    browserId: z.string().describe("Browser ID to close")
-  },
-  async ({ browserId }: { browserId: string }) => {
-    try {
-      // Get the browser instance
-      const instance = browserInstances.get(browserId);
-      if (!instance) {
-        throw new Error(`Browser instance not found: ${browserId}`);
-      }
-      
-      // Close the context/browser
-      try {
-        await instance.context.close();
-      } finally {
-        if (instance.browser) {
-          await instance.browser.close().catch(() => {});
-        }
-      }
-      
-      // Remove from the map
-      browserInstances.delete(browserId);
-
-      if (instance.cleanupUserDataDir && instance.userDataDir) {
-        await fs.rm(instance.userDataDir, { recursive: true, force: true });
-      }
-      
-      return pwOk(`Successfully closed browser: ${browserId}`);
-    } catch (error) {
-      return pwError("Failed to close browser", error);
     }
   }
 );

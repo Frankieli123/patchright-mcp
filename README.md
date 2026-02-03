@@ -1,59 +1,139 @@
-# Patchright MCP (Lite)
+# Patchright MCP
+
+[![npm version](https://img.shields.io/npm/v/@a3180623/patchright-mcp.svg)](https://www.npmjs.com/package/@a3180623/patchright-mcp)
+[![npm downloads](https://img.shields.io/npm/dm/@a3180623/patchright-mcp.svg)](https://www.npmjs.com/package/@a3180623/patchright-mcp)
+[![license](https://img.shields.io/npm/l/@a3180623/patchright-mcp.svg)](https://github.com/Frankieli123/patchright-mcp/blob/main/LICENSE)
 
 [中文](#中文) | [English](#english)
 
+---
+
+## 📦 版本 / Version
+
+**当前版本 / Current**: `v1.0.0`
+
+### 更新日志 / Changelog
+
+#### v1.0.0 (2026-02-03)
+- 🎉 首次发布
+- ✨ 支持 ARIA Snapshot + Ref 定位工作流
+- ✨ 完整 Playwright MCP 风格工具集（`browser_*`）
+- ✨ 会话持久化（profile 复用）
+- ✨ 扩展工具：`request` / `wait_for_response`
+- ✨ 磁盘治理：`browser_cleanup`
+
+---
+
 ## 中文
 
-基于 Patchright Node.js SDK（与 Playwright 兼容，并带有隐身增强）的 MCP 服务器。它对齐了 Playwright MCP 的常用工作流（ARIA snapshot + ref），同时保留了更“轻量”的接口（`browse/interact/extract/...`）方便简单客户端接入。
+基于 **Patchright Node.js SDK**（Playwright 兼容 + 隐身增强）的 MCP（Model Context Protocol）服务器。专为 AI 代理设计，提供完整的浏览器自动化能力。
 
-### 特性
+### ✨ 核心特性
 
-- 通过 profile 复用会话（默认 `profile: "default"`，可持续保存登录态）
-- 同时提供 Playwright 风格工具（`browser_*`）与轻量工具（`browse` 等）
-- 支持 ARIA snapshot + `ref` 精准定位（优先 ref；可回退 selector）
-- 结构化返回（result/code/tabs/console/downloads/page/snapshot）
-- 提供 `browser_cleanup` 清理 profile/downloads/traces，避免磁盘无限增长
+| 特性 | 说明 |
+|------|------|
+| 🎭 **隐身浏览** | 基于 Patchright，绕过常见反爬检测（CDP/Webdriver 指纹等） |
+| 🎯 **ARIA Snapshot + Ref 定位** | 用 `browser_snapshot(type="aria")` 产出带 `ref` 的快照，精准元素交互 |
+| 🔄 **会话持久化** | 默认使用持久化 profile 保留登录态，免重复登录 |
+| 📦 **结构化响应** | 返回 `result/code/tabs/console/downloads/page/snapshot/images` |
+| 🧹 **磁盘治理** | `browser_cleanup` 清理临时文件，防止无限增长 |
+| 🌐 **HTTP 扩展** | `request` / `wait_for_response` 用浏览器上下文发请求（带 Cookie） |
 
-### 环境要求
+### 📋 环境要求
 
-- Node.js 18+
-- npm
+- **Node.js** 18+
+- **npm** 或 **pnpm**
 
-### 安装
+### 🚀 快速使用（无需下载源码）
+
+#### 方法 1：npx 直接运行（推荐）
 
 ```bash
+npx @a3180623/patchright-mcp
+```
+
+Claude Desktop 配置：
+```json
+{
+  "mcpServers": {
+    "patchright": {
+      "command": "npx",
+      "args": ["-y", "@a3180623/patchright-mcp"]
+    }
+  }
+}
+```
+
+#### 方法 2：全局安装
+
+```bash
+# 从 npm 安装
+npm install -g @a3180623/patchright-mcp
+
+# 运行
+patchright-mcp
+```
+
+Claude Desktop 配置：
+```json
+{
+  "mcpServers": {
+    "patchright": {
+      "command": "patchright-mcp"
+    }
+  }
+}
+```
+
+### 📦 从源码安装
+
+```bash
+# 克隆仓库
 git clone https://github.com/Frankieli123/patchright-mcp.git
 cd patchright-mcp
+
+# 安装依赖
 npm ci
+
+# 构建项目
 npm run build
 ```
 
-安装浏览器二进制（任选一种）：
-
-- 命令行：`npx patchright install chromium`
-- MCP 工具：`browser_install`（更适合远程/容器环境）
-
-### 运行
+**安装浏览器二进制**（二选一）：
 
 ```bash
+# 方式 1：命令行安装
+npx patchright install chromium
+
+# 方式 2：通过 MCP 工具安装（适合远程/容器环境）
+# 调用 browser_install 工具
+```
+
+### ▶️ 运行
+
+```bash
+# 生产模式
 npm start
-```
 
-可选：通过 `--caps` 精简/控制能力（也可用环境变量 `PATCHRIGHT_MCP_CAPS`），例如：
-
-```bash
-npm start -- --caps=vision,pdf
-```
-
-开发模式：
-
-```bash
+# 开发模式（热重载）
 npm run dev
 ```
 
-### 集成示例
+**可选能力控制**（通过 `--caps` 或环境变量 `PATCHRIGHT_MCP_CAPS`）：
 
-Claude Desktop（`claude-desktop-config.json`）：
+```bash
+# 仅启用 vision 和 pdf 能力
+npm start -- --caps=vision,pdf
+
+# 启用所有能力
+npm start -- --caps=all
+```
+
+### 🔧 集成配置
+
+#### Claude Desktop
+
+编辑 `claude-desktop-config.json`：
 
 ```json
 {
@@ -66,38 +146,36 @@ Claude Desktop（`claude-desktop-config.json`）：
 }
 ```
 
-### 工具概览
+#### Amp / VS Code
 
-**轻量工具**（简单 API）：
+在 `.amp/settings.json` 或项目配置中添加：
 
-- `browse`：打开 URL（默认复用持久 profile）
-- `navigate`：在同一会话内跳转（保持登录态）
-- `interact`：按 selector 做 click/fill/select
-- `extract`：提取 text/html/screenshot
-- `execute_script`：在页面上下文执行 JS
-- `request`：使用浏览器上下文发请求（保留 cookie；无 CORS 限制）
-- `wait_for_response`：等待匹配的网络响应并返回 body
-- `close`：关闭浏览器会话
+```json
+{
+  "mcpServers": {
+    "patchright": {
+      "command": "node",
+      "args": ["path/to/patchright-mcp/dist/index.js"]
+    }
+  }
+}
+```
 
-**Playwright MCP 风格**（`browser_*`）：
+### 📖 推荐工作流（ARIA Snapshot + Ref）
 
-- 导航/会话：`browser_open`, `browser_navigate`, `browser_navigate_back`, `browser_tabs`, `browser_wait_for`
-- 快照：`browser_snapshot`（使用 `type: "aria"` 获取带 ref 的 ARIA snapshot）
-- 动作：`browser_click`, `browser_type`, `browser_hover`, `browser_drag`, `browser_select_option`, `browser_press_key`, `browser_take_screenshot` 等
-- JS：`browser_evaluate`
-- 坐标系（vision）：`browser_mouse_move_xy`, `browser_mouse_click_xy`, `browser_mouse_down`, `browser_mouse_up`, `browser_mouse_wheel`, `browser_mouse_drag_xy`
-- PDF（pdf）：`browser_pdf_save`
-- 测试断言（testing）：`browser_generate_locator`, `browser_verify_*`
-- Tracing（tracing）：`browser_start_tracing`, `browser_stop_tracing`
-- 诊断：`browser_console_messages`, `browser_network_requests`
-- 生命周期：`browser_close`, `browser_install`, `browser_cleanup`
+**步骤 1：获取页面快照**
 
-### ARIA snapshot + ref 用法
+```json
+{ "type": "aria" }
+```
 
-推荐流程：
+返回带 `ref` 标识的 ARIA 快照，如：
+```
+[ref=123] button "登录"
+[ref=456] textbox "用户名"
+```
 
-1）先调用 `browser_snapshot` 且 `type: "aria"`，从快照文本中读取 ref。
-2）动作工具使用结构化 `target`（推荐）：
+**步骤 2：基于 ref 交互**
 
 ```json
 {
@@ -105,97 +183,178 @@ Claude Desktop（`claude-desktop-config.json`）：
 }
 ```
 
-也支持 selector 回退：
+**备选：使用 CSS 选择器**
 
 ```json
 {
-  "target": { "kind": "selector", "selector": "#login" }
+  "target": { "kind": "selector", "selector": "#login-btn" }
 }
 ```
 
-为兼容旧调用，顶层 `selector` 或 `element`+`ref` 仍然可用。
+### 🛠️ 工具一览
 
-### 磁盘占用与清理
+#### 核心工具（Playwright MCP 风格）
 
-本服务会把 profiles/downloads/traces 存在系统临时目录下（Windows 通常是 `%TEMP%\\patchright-mcp`，Linux 是 `/tmp/patchright-mcp`）。
+| 类别 | 工具 |
+|------|------|
+| **导航** | `browser_open`, `browser_navigate`, `browser_navigate_back`, `browser_tabs` |
+| **快照** | `browser_snapshot`（支持 aria/text/html） |
+| **交互** | `browser_click`, `browser_type`, `browser_hover`, `browser_drag`, `browser_select_option`, `browser_press_key` |
+| **表单** | `browser_fill_form`, `browser_file_upload` |
+| **等待** | `browser_wait_for` |
+| **JavaScript** | `browser_evaluate`, `browser_run_code`（需启用） |
+| **截图/PDF** | `browser_take_screenshot`, `browser_pdf_save` |
+| **诊断** | `browser_console_messages`, `browser_network_requests` |
+| **生命周期** | `browser_close`, `browser_install`, `browser_cleanup` |
+| **鼠标** | `browser_mouse_click_xy`, `browser_mouse_move_xy`, `browser_mouse_drag_xy` |
+| **验证** | `browser_verify_element_visible`, `browser_verify_text_visible`, `browser_verify_value` |
+| **追踪** | `browser_start_tracing`, `browser_stop_tracing` |
 
-建议周期性调用 `browser_cleanup` 防止磁盘无限增长。注意：清理 profiles 会清空持久化登录态。
+#### 扩展工具（独有）
 
-### 环境变量
+| 工具 | 说明 |
+|------|------|
+| `request` | 用浏览器上下文发 HTTP 请求（保留 Cookie），返回 JSON/text |
+| `wait_for_response` | 等待匹配 URL 片段的网络响应并返回 body |
 
-- `PATCHRIGHT_MCP_CAPS`：控制可选能力（逗号分隔：`vision,pdf,testing,tracing`；支持 `all`）。默认不设置时启用全部；如需最小化可设为空或只保留需要的能力。
-- `PATCHRIGHT_MCP_ENABLE_RUN_CODE=1`：启用 `browser_run_code`（危险能力，默认关闭）
-- `PATCHRIGHT_MCP_SECRETS_JSON` / `PATCHRIGHT_MCP_SECRETS`：对输出文本中的敏感信息做掩码（JSON 对象，例如 `{"openai":"sk-..."}`）
+### 🔄 从旧版迁移
 
-### Docker
+旧版 Lite 工具已移除，替换如下：
 
-本地构建并运行：
+| 旧工具 | 新工具 |
+|--------|--------|
+| `browse` | `browser_open` 或 `browser_navigate` |
+| `navigate` | `browser_navigate` |
+| `interact` | `browser_click` / `browser_type` / `browser_select_option` |
+| `extract` | `browser_snapshot` / `browser_take_screenshot` |
+| `execute_script` | `browser_evaluate`（或 `browser_run_code`） |
+| `close` | `browser_close` |
 
-```bash
-docker build -t patchright-mcp .
-docker run -it --rm patchright-mcp
-```
+### 💾 磁盘占用与清理
 
-仓库内已配置 GitHub Actions 自动推送 Docker Hub（见 `.github/workflows/docker-hub-publish.yml`）。如需启用，请修改镜像名并在仓库 Secrets 中配置 `DOCKERHUB_USERNAME` / `DOCKERHUB_TOKEN`。
+临时文件默认目录：
+- **Windows**: `%TEMP%\patchright-mcp`
+- **Linux/macOS**: `/tmp/patchright-mcp`
 
-### License
+包含子目录：
+- `profiles/` - 持久化浏览器 profile
+- `downloads/` - 下载文件
+- `traces/` - 追踪记录
+- `pdfs/` - PDF 导出
 
-Apache-2.0（见 `LICENSE`）。
+**建议**：周期性调用 `browser_cleanup` 清理，注意清理 profiles 会清除登录态。
+
+### ⚙️ 环境变量
+
+| 变量 | 说明 |
+|------|------|
+| `PATCHRIGHT_MCP_CAPS` | 可选能力（逗号分隔：`vision,pdf,testing,tracing`；支持 `all`）。不设置时默认全开 |
+| `PATCHRIGHT_MCP_ENABLE_RUN_CODE=1` | 启用 `browser_run_code`（危险能力，默认关闭） |
+| `PATCHRIGHT_MCP_SECRETS_JSON` | 对输出文本中的敏感信息做掩码（JSON 对象，如 `{"openai":"sk-..."}`) |
+| `PATCHRIGHT_MCP_SECRETS` | 同上（别名） |
+
+### 📄 License
+
+Apache-2.0（见 [LICENSE](LICENSE)）
 
 ---
 
 ## English
 
-A Model Context Protocol (MCP) server powered by the Patchright Node.js SDK (Playwright-compatible with stealth enhancements). It exposes a Playwright MCP–style toolset (ARIA snapshot + refs) while keeping a small “lite” interface (`browse/interact/extract/...`) for simpler clients.
+An MCP (Model Context Protocol) server powered by **Patchright Node.js SDK** (Playwright-compatible with stealth enhancements). Designed for AI agents with comprehensive browser automation capabilities.
 
-### Features
+### ✨ Key Features
 
-- Persistent sessions via named profiles (`profile: "default"` by default)
-- Playwright-style tools (`browser_*`) + lightweight tools (`browse`, `interact`, ...)
-- ARIA snapshot + `ref` targeting (ref-first; selector fallback supported)
-- Structured responses (result/code/tabs/console/downloads/page/snapshot)
-- Disk hygiene via `browser_cleanup` (profiles/downloads/traces)
+| Feature | Description |
+|---------|-------------|
+| 🎭 **Stealth Browsing** | Based on Patchright, bypasses common anti-bot detection (CDP/Webdriver fingerprints) |
+| 🎯 **ARIA Snapshot + Ref Targeting** | Use `browser_snapshot(type="aria")` to get snapshots with `ref`s for precise element interaction |
+| 🔄 **Session Persistence** | Persistent profiles keep login state by default |
+| 📦 **Structured Responses** | Returns `result/code/tabs/console/downloads/page/snapshot/images` |
+| 🧹 **Disk Hygiene** | `browser_cleanup` cleans temp files to prevent disk bloat |
+| 🌐 **HTTP Extensions** | `request` / `wait_for_response` for browser-context HTTP requests with cookies |
 
-### Requirements
+### 📋 Requirements
 
-- Node.js 18+
-- npm
+- **Node.js** 18+
+- **npm** or **pnpm**
 
-### Install
+### 🚀 Quick Start (No Source Code Download)
+
+#### Option 1: npx (Recommended)
 
 ```bash
+npx @a3180623/patchright-mcp
+```
+
+Claude Desktop config:
+```json
+{
+  "mcpServers": {
+    "patchright": {
+      "command": "npx",
+      "args": ["-y", "@a3180623/patchright-mcp"]
+    }
+  }
+}
+```
+
+#### Option 2: Global Install
+
+```bash
+npm install -g @a3180623/patchright-mcp
+patchright-mcp
+```
+
+### 📦 Install from Source
+
+```bash
+# Clone repository
 git clone https://github.com/Frankieli123/patchright-mcp.git
 cd patchright-mcp
+
+# Install dependencies
 npm ci
+
+# Build project
 npm run build
 ```
 
-Install browser binaries (pick one):
-
-- CLI: `npx patchright install chromium`
-- MCP tool: `browser_install` (recommended for remote runners)
-
-### Run
+**Install browser binaries** (pick one):
 
 ```bash
+# Option 1: CLI install
+npx patchright install chromium
+
+# Option 2: MCP tool (recommended for remote/container environments)
+# Call browser_install tool
+```
+
+### ▶️ Running
+
+```bash
+# Production mode
 npm start
-```
 
-Optional: control optional capabilities via `--caps` (or env `PATCHRIGHT_MCP_CAPS`), for example:
-
-```bash
-npm start -- --caps=vision,pdf
-```
-
-For development:
-
-```bash
+# Development mode (hot reload)
 npm run dev
 ```
 
-### Integrations
+**Optional capabilities** (via `--caps` or env `PATCHRIGHT_MCP_CAPS`):
 
-Claude Desktop (`claude-desktop-config.json`):
+```bash
+# Enable only vision and pdf
+npm start -- --caps=vision,pdf
+
+# Enable all capabilities
+npm start -- --caps=all
+```
+
+### 🔧 Integration
+
+#### Claude Desktop
+
+Edit `claude-desktop-config.json`:
 
 ```json
 {
@@ -208,38 +367,21 @@ Claude Desktop (`claude-desktop-config.json`):
 }
 ```
 
-### Tooling overview
+### 📖 Recommended Workflow (ARIA Snapshot + Ref)
 
-**Lite tools** (simple API):
+**Step 1: Get page snapshot**
 
-- `browse`: open URL (reuses persistent profile by default)
-- `navigate`: navigate within an existing session (keeps login state)
-- `interact`: simple click/fill/select by selector
-- `extract`: text/html/screenshot
-- `execute_script`: run JS in page context
-- `request`: fetch via browser context (cookies preserved; no CORS)
-- `wait_for_response`: wait for a matching network response body
-- `close`: close a browser session
+```json
+{ "type": "aria" }
+```
 
-**Playwright MCP style** (`browser_*`):
+Returns ARIA snapshot with `ref` identifiers:
+```
+[ref=123] button "Login"
+[ref=456] textbox "Username"
+```
 
-- Navigation/session: `browser_open`, `browser_navigate`, `browser_navigate_back`, `browser_tabs`, `browser_wait_for`
-- Snapshot: `browser_snapshot` (use `type: "aria"` for ARIA snapshot + refs)
-- Actions: `browser_click`, `browser_type`, `browser_hover`, `browser_drag`, `browser_select_option`, `browser_press_key`, `browser_take_screenshot`, ...
-- JS: `browser_evaluate`
-- Coordinate-based (vision): `browser_mouse_move_xy`, `browser_mouse_click_xy`, `browser_mouse_down`, `browser_mouse_up`, `browser_mouse_wheel`, `browser_mouse_drag_xy`
-- PDF (pdf): `browser_pdf_save`
-- Testing (testing): `browser_generate_locator`, `browser_verify_*`
-- Tracing (tracing): `browser_start_tracing`, `browser_stop_tracing`
-- Diagnostics: `browser_console_messages`, `browser_network_requests`
-- Lifecycle: `browser_close`, `browser_install`, `browser_cleanup`
-
-### ARIA snapshot + ref targeting
-
-Recommended flow:
-
-1) Call `browser_snapshot` with `type: "aria"` and read refs from the snapshot text.
-2) Use ref-first actions with a structured `target`:
+**Step 2: Interact using ref**
 
 ```json
 {
@@ -247,39 +389,72 @@ Recommended flow:
 }
 ```
 
-Selector fallback is also supported:
+**Fallback: CSS selector**
 
 ```json
 {
-  "target": { "kind": "selector", "selector": "#login" }
+  "target": { "kind": "selector", "selector": "#login-btn" }
 }
 ```
 
-Legacy top-level params `selector` or `element`+`ref` remain supported for compatibility.
+### 🛠️ Tools Overview
 
-### Disk usage / cleanup
+#### Core Tools (Playwright MCP Style)
 
-This server stores profiles/downloads/traces under OS temp (e.g. `%TEMP%\\patchright-mcp` on Windows, `/tmp/patchright-mcp` on Linux).
+| Category | Tools |
+|----------|-------|
+| **Navigation** | `browser_open`, `browser_navigate`, `browser_navigate_back`, `browser_tabs` |
+| **Snapshot** | `browser_snapshot` (aria/text/html) |
+| **Interaction** | `browser_click`, `browser_type`, `browser_hover`, `browser_drag`, `browser_select_option`, `browser_press_key` |
+| **Forms** | `browser_fill_form`, `browser_file_upload` |
+| **Wait** | `browser_wait_for` |
+| **JavaScript** | `browser_evaluate`, `browser_run_code` (requires enable) |
+| **Screenshot/PDF** | `browser_take_screenshot`, `browser_pdf_save` |
+| **Diagnostics** | `browser_console_messages`, `browser_network_requests` |
+| **Lifecycle** | `browser_close`, `browser_install`, `browser_cleanup` |
+| **Mouse** | `browser_mouse_click_xy`, `browser_mouse_move_xy`, `browser_mouse_drag_xy` |
+| **Verification** | `browser_verify_element_visible`, `browser_verify_text_visible`, `browser_verify_value` |
+| **Tracing** | `browser_start_tracing`, `browser_stop_tracing` |
 
-Use `browser_cleanup` to prevent unbounded growth. Note: cleaning profiles will wipe persisted login state.
+#### Extension Tools (Unique)
 
-### Environment variables
+| Tool | Description |
+|------|-------------|
+| `request` | HTTP request using browser context (with cookies), returns JSON/text |
+| `wait_for_response` | Wait for network response matching URL substring and return body |
 
-- `PATCHRIGHT_MCP_CAPS`: optional capabilities (comma-separated: `vision,pdf,testing,tracing`; supports `all`). If unset, all are enabled by default; set to empty or a subset to restrict.
-- `PATCHRIGHT_MCP_ENABLE_RUN_CODE=1` enables `browser_run_code` (dangerous; disabled by default)
-- `PATCHRIGHT_MCP_SECRETS_JSON` or `PATCHRIGHT_MCP_SECRETS` masks known secrets in text output (JSON object, e.g. `{"openai":"sk-..."}`)
+### 🔄 Migration from Legacy
 
-### Docker
+Legacy Lite tools removed. Replacements:
 
-Build and run locally:
+| Old | New |
+|-----|-----|
+| `browse` | `browser_open` or `browser_navigate` |
+| `navigate` | `browser_navigate` |
+| `interact` | `browser_click` / `browser_type` / `browser_select_option` |
+| `extract` | `browser_snapshot` / `browser_take_screenshot` |
+| `execute_script` | `browser_evaluate` (or `browser_run_code`) |
+| `close` | `browser_close` |
 
-```bash
-docker build -t patchright-mcp .
-docker run -it --rm patchright-mcp
-```
+### 💾 Disk Usage & Cleanup
 
-Publishing to Docker Hub is wired via GitHub Actions (`.github/workflows/docker-hub-publish.yml`). Update the image name and provide `DOCKERHUB_USERNAME` / `DOCKERHUB_TOKEN` secrets in your repo settings.
+Default temp directory:
+- **Windows**: `%TEMP%\patchright-mcp`
+- **Linux/macOS**: `/tmp/patchright-mcp`
 
-### License
+Subdirectories: `profiles/`, `downloads/`, `traces/`, `pdfs/`
 
-Apache-2.0 (see `LICENSE`).
+**Recommendation**: Periodically call `browser_cleanup`. Note: cleaning profiles will clear login state.
+
+### ⚙️ Environment Variables
+
+| Variable | Description |
+|----------|-------------|
+| `PATCHRIGHT_MCP_CAPS` | Capabilities (comma-separated: `vision,pdf,testing,tracing`; supports `all`). All enabled by default |
+| `PATCHRIGHT_MCP_ENABLE_RUN_CODE=1` | Enable `browser_run_code` (dangerous; disabled by default) |
+| `PATCHRIGHT_MCP_SECRETS_JSON` | Mask sensitive info in output (JSON object, e.g., `{"openai":"sk-..."}`) |
+| `PATCHRIGHT_MCP_SECRETS` | Same as above (alias) |
+
+### 📄 License
+
+Apache-2.0 (see [LICENSE](LICENSE))
