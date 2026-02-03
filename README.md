@@ -1,136 +1,6 @@
 # Patchright MCP (Lite)
 
-[English](#english) | [中文](#中文)
-
-## English
-
-A Model Context Protocol (MCP) server powered by the Patchright Node.js SDK (Playwright-compatible with stealth enhancements). It exposes a Playwright MCP–style toolset (ARIA snapshot + refs) while keeping a small “lite” interface (`browse/interact/extract/...`) for simpler clients.
-
-### Features
-
-- Persistent sessions via named profiles (`profile: "default"` by default)
-- Playwright-style tools (`browser_*`) + lightweight tools (`browse`, `interact`, ...)
-- ARIA snapshot + `ref` targeting (ref-first; selector fallback supported)
-- Structured responses (result/code/tabs/console/downloads/page/snapshot)
-- Disk hygiene via `browser_cleanup` (profiles/downloads/traces)
-
-### Requirements
-
-- Node.js 18+
-- npm
-
-### Install
-
-```bash
-git clone https://github.com/Frankieli123/patchright-mcp.git
-cd patchright-mcp
-npm ci
-npm run build
-```
-
-Install browser binaries (pick one):
-
-- CLI: `npx patchright install chromium`
-- MCP tool: `browser_install` (recommended for remote runners)
-
-### Run
-
-```bash
-npm start
-```
-
-For development:
-
-```bash
-npm run dev
-```
-
-### Integrations
-
-Claude Desktop (`claude-desktop-config.json`):
-
-```json
-{
-  "mcpServers": {
-    "patchright": {
-      "command": "node",
-      "args": ["path/to/patchright-mcp/dist/index.js"]
-    }
-  }
-}
-```
-
-### Tooling overview
-
-**Lite tools** (simple API):
-
-- `browse`: open URL (reuses persistent profile by default)
-- `navigate`: navigate within an existing session (keeps login state)
-- `interact`: simple click/fill/select by selector
-- `extract`: text/html/screenshot
-- `execute_script`: run JS in page context
-- `request`: fetch via browser context (cookies preserved; no CORS)
-- `wait_for_response`: wait for a matching network response body
-- `close`: close a browser session
-
-**Playwright MCP style** (`browser_*`):
-
-- Navigation/session: `browser_open`, `browser_navigate`, `browser_navigate_back`, `browser_tabs`, `browser_wait_for`
-- Snapshot: `browser_snapshot` (use `type: "aria"` for ARIA snapshot + refs)
-- Actions: `browser_click`, `browser_type`, `browser_hover`, `browser_drag`, `browser_select_option`, `browser_take_screenshot`, ...
-- Diagnostics: `browser_console_messages`, `browser_network_requests`, `browser_start_tracing`, `browser_stop_tracing`
-- Lifecycle: `browser_close`, `browser_install`, `browser_cleanup`
-
-### ARIA snapshot + ref targeting
-
-Recommended flow:
-
-1) Call `browser_snapshot` with `type: "aria"` and read refs from the snapshot text.
-2) Use ref-first actions with a structured `target`:
-
-```json
-{
-  "target": { "kind": "ref", "element": "Login button", "ref": "123" }
-}
-```
-
-Selector fallback is also supported:
-
-```json
-{
-  "target": { "kind": "selector", "selector": "#login" }
-}
-```
-
-Legacy top-level params `selector` or `element`+`ref` remain supported for compatibility.
-
-### Disk usage / cleanup
-
-This server stores profiles/downloads/traces under OS temp (e.g. `%TEMP%\\patchright-mcp` on Windows, `/tmp/patchright-mcp` on Linux).
-
-Use `browser_cleanup` to prevent unbounded growth. Note: cleaning profiles will wipe persisted login state.
-
-### Environment variables
-
-- `PATCHRIGHT_MCP_ENABLE_RUN_CODE=1` enables `browser_run_code` (dangerous; disabled by default)
-- `PATCHRIGHT_MCP_SECRETS_JSON` or `PATCHRIGHT_MCP_SECRETS` masks known secrets in text output (JSON object, e.g. `{"openai":"sk-..."}`)
-
-### Docker
-
-Build and run locally:
-
-```bash
-docker build -t patchright-mcp .
-docker run -it --rm patchright-mcp
-```
-
-Publishing to Docker Hub is wired via GitHub Actions (`.github/workflows/docker-hub-publish.yml`). Update the image name and provide `DOCKERHUB_USERNAME` / `DOCKERHUB_TOKEN` secrets in your repo settings.
-
-### License
-
-Apache-2.0 (see `LICENSE`).
-
----
+[中文](#中文) | [English](#english)
 
 ## 中文
 
@@ -259,3 +129,133 @@ docker run -it --rm patchright-mcp
 ### License
 
 Apache-2.0（见 `LICENSE`）。
+
+---
+
+## English
+
+A Model Context Protocol (MCP) server powered by the Patchright Node.js SDK (Playwright-compatible with stealth enhancements). It exposes a Playwright MCP–style toolset (ARIA snapshot + refs) while keeping a small “lite” interface (`browse/interact/extract/...`) for simpler clients.
+
+### Features
+
+- Persistent sessions via named profiles (`profile: "default"` by default)
+- Playwright-style tools (`browser_*`) + lightweight tools (`browse`, `interact`, ...)
+- ARIA snapshot + `ref` targeting (ref-first; selector fallback supported)
+- Structured responses (result/code/tabs/console/downloads/page/snapshot)
+- Disk hygiene via `browser_cleanup` (profiles/downloads/traces)
+
+### Requirements
+
+- Node.js 18+
+- npm
+
+### Install
+
+```bash
+git clone https://github.com/Frankieli123/patchright-mcp.git
+cd patchright-mcp
+npm ci
+npm run build
+```
+
+Install browser binaries (pick one):
+
+- CLI: `npx patchright install chromium`
+- MCP tool: `browser_install` (recommended for remote runners)
+
+### Run
+
+```bash
+npm start
+```
+
+For development:
+
+```bash
+npm run dev
+```
+
+### Integrations
+
+Claude Desktop (`claude-desktop-config.json`):
+
+```json
+{
+  "mcpServers": {
+    "patchright": {
+      "command": "node",
+      "args": ["path/to/patchright-mcp/dist/index.js"]
+    }
+  }
+}
+```
+
+### Tooling overview
+
+**Lite tools** (simple API):
+
+- `browse`: open URL (reuses persistent profile by default)
+- `navigate`: navigate within an existing session (keeps login state)
+- `interact`: simple click/fill/select by selector
+- `extract`: text/html/screenshot
+- `execute_script`: run JS in page context
+- `request`: fetch via browser context (cookies preserved; no CORS)
+- `wait_for_response`: wait for a matching network response body
+- `close`: close a browser session
+
+**Playwright MCP style** (`browser_*`):
+
+- Navigation/session: `browser_open`, `browser_navigate`, `browser_navigate_back`, `browser_tabs`, `browser_wait_for`
+- Snapshot: `browser_snapshot` (use `type: "aria"` for ARIA snapshot + refs)
+- Actions: `browser_click`, `browser_type`, `browser_hover`, `browser_drag`, `browser_select_option`, `browser_take_screenshot`, ...
+- Diagnostics: `browser_console_messages`, `browser_network_requests`, `browser_start_tracing`, `browser_stop_tracing`
+- Lifecycle: `browser_close`, `browser_install`, `browser_cleanup`
+
+### ARIA snapshot + ref targeting
+
+Recommended flow:
+
+1) Call `browser_snapshot` with `type: "aria"` and read refs from the snapshot text.
+2) Use ref-first actions with a structured `target`:
+
+```json
+{
+  "target": { "kind": "ref", "element": "Login button", "ref": "123" }
+}
+```
+
+Selector fallback is also supported:
+
+```json
+{
+  "target": { "kind": "selector", "selector": "#login" }
+}
+```
+
+Legacy top-level params `selector` or `element`+`ref` remain supported for compatibility.
+
+### Disk usage / cleanup
+
+This server stores profiles/downloads/traces under OS temp (e.g. `%TEMP%\\patchright-mcp` on Windows, `/tmp/patchright-mcp` on Linux).
+
+Use `browser_cleanup` to prevent unbounded growth. Note: cleaning profiles will wipe persisted login state.
+
+### Environment variables
+
+- `PATCHRIGHT_MCP_ENABLE_RUN_CODE=1` enables `browser_run_code` (dangerous; disabled by default)
+- `PATCHRIGHT_MCP_SECRETS_JSON` or `PATCHRIGHT_MCP_SECRETS` masks known secrets in text output (JSON object, e.g. `{"openai":"sk-..."}`)
+
+### Docker
+
+Build and run locally:
+
+```bash
+docker build -t patchright-mcp .
+docker run -it --rm patchright-mcp
+```
+
+Publishing to Docker Hub is wired via GitHub Actions (`.github/workflows/docker-hub-publish.yml`). Update the image name and provide `DOCKERHUB_USERNAME` / `DOCKERHUB_TOKEN` secrets in your repo settings.
+
+### License
+
+Apache-2.0 (see `LICENSE`).
