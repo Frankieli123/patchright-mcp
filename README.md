@@ -39,6 +39,12 @@ npm run build
 npm start
 ```
 
+可选：通过 `--caps` 精简/控制能力（也可用环境变量 `PATCHRIGHT_MCP_CAPS`），例如：
+
+```bash
+npm start -- --caps=vision,pdf
+```
+
 开发模式：
 
 ```bash
@@ -77,8 +83,13 @@ Claude Desktop（`claude-desktop-config.json`）：
 
 - 导航/会话：`browser_open`, `browser_navigate`, `browser_navigate_back`, `browser_tabs`, `browser_wait_for`
 - 快照：`browser_snapshot`（使用 `type: "aria"` 获取带 ref 的 ARIA snapshot）
-- 动作：`browser_click`, `browser_type`, `browser_hover`, `browser_drag`, `browser_select_option`, `browser_take_screenshot` 等
-- 诊断：`browser_console_messages`, `browser_network_requests`, `browser_start_tracing`, `browser_stop_tracing`
+- 动作：`browser_click`, `browser_type`, `browser_hover`, `browser_drag`, `browser_select_option`, `browser_press_key`, `browser_take_screenshot` 等
+- JS：`browser_evaluate`
+- 坐标系（vision）：`browser_mouse_move_xy`, `browser_mouse_click_xy`, `browser_mouse_down`, `browser_mouse_up`, `browser_mouse_wheel`, `browser_mouse_drag_xy`
+- PDF（pdf）：`browser_pdf_save`
+- 测试断言（testing）：`browser_generate_locator`, `browser_verify_*`
+- Tracing（tracing）：`browser_start_tracing`, `browser_stop_tracing`
+- 诊断：`browser_console_messages`, `browser_network_requests`
 - 生命周期：`browser_close`, `browser_install`, `browser_cleanup`
 
 ### ARIA snapshot + ref 用法
@@ -112,6 +123,7 @@ Claude Desktop（`claude-desktop-config.json`）：
 
 ### 环境变量
 
+- `PATCHRIGHT_MCP_CAPS`：控制可选能力（逗号分隔：`vision,pdf,testing,tracing`；支持 `all`）。默认不设置时启用全部；如需最小化可设为空或只保留需要的能力。
 - `PATCHRIGHT_MCP_ENABLE_RUN_CODE=1`：启用 `browser_run_code`（危险能力，默认关闭）
 - `PATCHRIGHT_MCP_SECRETS_JSON` / `PATCHRIGHT_MCP_SECRETS`：对输出文本中的敏感信息做掩码（JSON 对象，例如 `{"openai":"sk-..."}`）
 
@@ -169,6 +181,12 @@ Install browser binaries (pick one):
 npm start
 ```
 
+Optional: control optional capabilities via `--caps` (or env `PATCHRIGHT_MCP_CAPS`), for example:
+
+```bash
+npm start -- --caps=vision,pdf
+```
+
 For development:
 
 ```bash
@@ -207,8 +225,13 @@ Claude Desktop (`claude-desktop-config.json`):
 
 - Navigation/session: `browser_open`, `browser_navigate`, `browser_navigate_back`, `browser_tabs`, `browser_wait_for`
 - Snapshot: `browser_snapshot` (use `type: "aria"` for ARIA snapshot + refs)
-- Actions: `browser_click`, `browser_type`, `browser_hover`, `browser_drag`, `browser_select_option`, `browser_take_screenshot`, ...
-- Diagnostics: `browser_console_messages`, `browser_network_requests`, `browser_start_tracing`, `browser_stop_tracing`
+- Actions: `browser_click`, `browser_type`, `browser_hover`, `browser_drag`, `browser_select_option`, `browser_press_key`, `browser_take_screenshot`, ...
+- JS: `browser_evaluate`
+- Coordinate-based (vision): `browser_mouse_move_xy`, `browser_mouse_click_xy`, `browser_mouse_down`, `browser_mouse_up`, `browser_mouse_wheel`, `browser_mouse_drag_xy`
+- PDF (pdf): `browser_pdf_save`
+- Testing (testing): `browser_generate_locator`, `browser_verify_*`
+- Tracing (tracing): `browser_start_tracing`, `browser_stop_tracing`
+- Diagnostics: `browser_console_messages`, `browser_network_requests`
 - Lifecycle: `browser_close`, `browser_install`, `browser_cleanup`
 
 ### ARIA snapshot + ref targeting
@@ -242,6 +265,7 @@ Use `browser_cleanup` to prevent unbounded growth. Note: cleaning profiles will 
 
 ### Environment variables
 
+- `PATCHRIGHT_MCP_CAPS`: optional capabilities (comma-separated: `vision,pdf,testing,tracing`; supports `all`). If unset, all are enabled by default; set to empty or a subset to restrict.
 - `PATCHRIGHT_MCP_ENABLE_RUN_CODE=1` enables `browser_run_code` (dangerous; disabled by default)
 - `PATCHRIGHT_MCP_SECRETS_JSON` or `PATCHRIGHT_MCP_SECRETS` masks known secrets in text output (JSON object, e.g. `{"openai":"sk-..."}`)
 

@@ -111,6 +111,50 @@ function pushBounded<T>(arr: T[], item: T, max: number): void {
   }
 }
 
+type McpCap = "vision" | "pdf" | "testing" | "tracing";
+
+function readArgValue(argv: string[], name: string): string | undefined {
+  const eq = argv.find((a) => a.startsWith(`${name}=`));
+  if (eq) return eq.slice(name.length + 1);
+  const idx = argv.indexOf(name);
+  if (idx >= 0) return argv[idx + 1];
+  return undefined;
+}
+
+function parseCaps(raw: string): Set<McpCap> {
+  const normalized = raw.trim();
+  if (!normalized) return new Set<McpCap>();
+
+  const allowed = new Set<McpCap>(["vision", "pdf", "testing", "tracing"]);
+  const out = new Set<McpCap>();
+
+  const parts = normalized
+    .split(/[,\s]+/)
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
+
+  for (const p of parts) {
+    if (p === "all") {
+      for (const a of allowed) out.add(a);
+      continue;
+    }
+    if (allowed.has(p as McpCap)) out.add(p as McpCap);
+    else console.error(`Unknown cap: ${p}`);
+  }
+
+  return out;
+}
+
+const DEFAULT_CAPS = new Set<McpCap>(["vision", "pdf", "testing", "tracing"]);
+const CAPS_ARG = readArgValue(process.argv.slice(2), "--caps");
+const CAPS_ENV = process.env.PATCHRIGHT_MCP_CAPS;
+const HAS_EXPLICIT_CAPS = CAPS_ARG !== undefined || CAPS_ENV !== undefined;
+const MCP_CAPS = HAS_EXPLICIT_CAPS ? parseCaps(CAPS_ARG ?? CAPS_ENV ?? "") : DEFAULT_CAPS;
+
+function hasCap(cap: McpCap): boolean {
+  return MCP_CAPS.has(cap);
+}
+
 function registerPage(instance: BrowserInstance, page: Page): string {
   const existing = instance.pageIdByPage.get(page);
   if (existing) return existing;
@@ -2063,7 +2107,7 @@ server.tool(
   }
 );
 
-server.tool(
+const browserGenerateLocatorTool = server.tool(
   "browser_generate_locator",
   "Generate a Playwright locator expression for an element (best-effort)",
   {
@@ -2097,6 +2141,7 @@ server.tool(
     }
   }
 );
+if (!hasCap("testing")) browserGenerateLocatorTool.disable();
 
 server.tool(
   "browser_take_screenshot",
@@ -2185,7 +2230,7 @@ server.tool(
   }
 );
 
-server.tool(
+const browserPdfSaveTool = server.tool(
   "browser_pdf_save",
   "Save page as PDF",
   {
@@ -2214,6 +2259,7 @@ server.tool(
     }
   }
 );
+if (!hasCap("pdf")) browserPdfSaveTool.disable();
 
 server.tool(
   "browser_evaluate",
@@ -2221,29 +2267,85 @@ server.tool(
   {
     browserId: z.string().optional().describe("Browser ID (defaults to profile:default if omitted)"),
     pageId: z.string().optional().describe("Optional Page ID (defaults to the active page)"),
-    expression: z.string().describe("JavaScript snippet (function body). Example: `return localStorage.getItem('accessToken')`")
+    function: z
+      .string()
+      .optional()
+      .describe("Playwright MCP-style. () => { /* code */ } or (element) => { /* code */ } when element/ref is provided."),
+    element: z
+      .string()
+      .optional()
+      .describe("Human-readable element description used to obtain permission to interact with the element (required when using ref)"),
+    ref: z.string().optional().describe("Exact target element reference from the page snapshot"),
+    expression: z
+      .string()
+      .optional()
+      .describe("Legacy. JavaScript snippet (function body). Example: `return localStorage.getItem('accessToken')`")
   },
   async ({
     browserId,
     pageId,
+    function: fn,
+    element,
+    ref,
     expression
   }: {
     browserId?: string;
     pageId?: string;
-    expression: string;
+    function?: string;
+    element?: string;
+    ref?: string;
+    expression?: string;
   }) => {
     try {
       const resolvedBrowserId = browserId ?? profileBrowserId("default");
       const resolved = getPage(resolvedBrowserId, pageId);
       const page = resolved.page;
 
-      const wrapped = `(async () => { ${expression}\n})()`;
-      const result = (await page.evaluate(wrapped)) as unknown;
+      if (!fn && !expression) throw new Error("Provide either `function` (Playwright MCP-style) or `expression` (legacy).");
+      if (fn && expression) throw new Error("Provide only one of `function` or `expression`.");
+
+      let result: unknown;
+      let ranCode = "";
+
+      if (fn) {
+        const fnSource = fn.trim();
+        if (ref) {
+          const elementDesc = element ?? "element";
+          const target = await refLocator(page, { element: elementDesc, ref });
+          const handle = await target.locator.first().elementHandle();
+          if (!handle) throw new Error(`Element handle not found for ref ${ref}. Try capturing a new snapshot.`);
+
+          ranCode = fnSource;
+          result = await handle.evaluate(
+            async (el: any, { fnSource }: { fnSource: string }) => {
+              // eslint-disable-next-line no-eval
+              const fn = (0, eval)(fnSource);
+              return await fn(el);
+            },
+            { fnSource }
+          );
+        } else {
+          ranCode = fnSource;
+          result = await page.evaluate(
+            async ({ fnSource }: { fnSource: string }) => {
+              // eslint-disable-next-line no-eval
+              const fn = (0, eval)(fnSource);
+              return await fn();
+            },
+            { fnSource }
+          );
+        }
+      } else {
+        const wrapped = `(async () => { ${expression}\n})()`;
+        ranCode = wrapped;
+        result = (await page.evaluate(wrapped)) as unknown;
+      }
 
       return pwOk(
         `Evaluation completed.\n\nBrowser ID: ${resolvedBrowserId}\nPage ID: ${resolved.pageId}\nCurrent URL: ${page.url()}\n\nResult:\n${formatEvalResult(
           result
-        )}`
+        )}`,
+        ranCode ? { code: ranCode } : undefined
       );
     } catch (error) {
       return pwError("Failed to evaluate", error);
@@ -2251,7 +2353,7 @@ server.tool(
   }
 );
 
-server.tool(
+const browserMouseMoveTool = server.tool(
   "browser_mouse_move_xy",
   "Move mouse to a given position",
   {
@@ -2259,11 +2361,12 @@ server.tool(
     pageId: z.string().optional().describe("Optional Page ID (defaults to the active page)"),
     element: z
       .string()
+      .optional()
       .describe("Human-readable element description used to obtain permission to interact with the element"),
     x: z.number().describe("X coordinate"),
     y: z.number().describe("Y coordinate")
   },
-  async ({ browserId, pageId, x, y }: { browserId?: string; pageId?: string; element: string; x: number; y: number }) => {
+  async ({ browserId, pageId, x, y }: { browserId?: string; pageId?: string; element?: string; x: number; y: number }) => {
     try {
       const resolvedBrowserId = browserId ?? profileBrowserId("default");
       const resolved = getPage(resolvedBrowserId, pageId);
@@ -2279,8 +2382,9 @@ server.tool(
     }
   }
 );
+if (!hasCap("vision")) browserMouseMoveTool.disable();
 
-server.tool(
+const browserMouseClickTool = server.tool(
   "browser_mouse_click_xy",
   "Click left mouse button at a given position",
   {
@@ -2288,11 +2392,12 @@ server.tool(
     pageId: z.string().optional().describe("Optional Page ID (defaults to the active page)"),
     element: z
       .string()
+      .optional()
       .describe("Human-readable element description used to obtain permission to interact with the element"),
     x: z.number().describe("X coordinate"),
     y: z.number().describe("Y coordinate")
   },
-  async ({ browserId, pageId, x, y }: { browserId?: string; pageId?: string; element: string; x: number; y: number }) => {
+  async ({ browserId, pageId, x, y }: { browserId?: string; pageId?: string; element?: string; x: number; y: number }) => {
     try {
       const resolvedBrowserId = browserId ?? profileBrowserId("default");
       const resolved = getPage(resolvedBrowserId, pageId);
@@ -2310,8 +2415,88 @@ server.tool(
     }
   }
 );
+if (!hasCap("vision")) browserMouseClickTool.disable();
 
-server.tool(
+const browserMouseDownTool = server.tool(
+  "browser_mouse_down",
+  "Press mouse down",
+  {
+    browserId: z.string().optional().describe("Browser ID (defaults to profile:default if omitted)"),
+    pageId: z.string().optional().describe("Optional Page ID (defaults to the active page)"),
+    button: z.enum(["left", "right", "middle"]).optional().describe("Button to press, defaults to left")
+  },
+  async ({ browserId, pageId, button }: { browserId?: string; pageId?: string; button?: "left" | "right" | "middle" }) => {
+    try {
+      const resolvedBrowserId = browserId ?? profileBrowserId("default");
+      const resolved = getPage(resolvedBrowserId, pageId);
+      const page = resolved.page;
+
+      await page.mouse.down(button ? { button } : undefined);
+
+      return pwOk(
+        `Mouse down.\\n\\nBrowser ID: ${resolvedBrowserId}\\nPage ID: ${resolved.pageId}\\nButton: ${button ?? "left"}\\nCurrent URL: ${page.url()}`
+      );
+    } catch (error) {
+      return pwError("Failed to press mouse down", error);
+    }
+  }
+);
+if (!hasCap("vision")) browserMouseDownTool.disable();
+
+const browserMouseUpTool = server.tool(
+  "browser_mouse_up",
+  "Press mouse up",
+  {
+    browserId: z.string().optional().describe("Browser ID (defaults to profile:default if omitted)"),
+    pageId: z.string().optional().describe("Optional Page ID (defaults to the active page)"),
+    button: z.enum(["left", "right", "middle"]).optional().describe("Button to release, defaults to left")
+  },
+  async ({ browserId, pageId, button }: { browserId?: string; pageId?: string; button?: "left" | "right" | "middle" }) => {
+    try {
+      const resolvedBrowserId = browserId ?? profileBrowserId("default");
+      const resolved = getPage(resolvedBrowserId, pageId);
+      const page = resolved.page;
+
+      await page.mouse.up(button ? { button } : undefined);
+
+      return pwOk(
+        `Mouse up.\\n\\nBrowser ID: ${resolvedBrowserId}\\nPage ID: ${resolved.pageId}\\nButton: ${button ?? "left"}\\nCurrent URL: ${page.url()}`
+      );
+    } catch (error) {
+      return pwError("Failed to press mouse up", error);
+    }
+  }
+);
+if (!hasCap("vision")) browserMouseUpTool.disable();
+
+const browserMouseWheelTool = server.tool(
+  "browser_mouse_wheel",
+  "Scroll mouse wheel",
+  {
+    browserId: z.string().optional().describe("Browser ID (defaults to profile:default if omitted)"),
+    pageId: z.string().optional().describe("Optional Page ID (defaults to the active page)"),
+    deltaX: z.number().describe("X delta"),
+    deltaY: z.number().describe("Y delta")
+  },
+  async ({ browserId, pageId, deltaX, deltaY }: { browserId?: string; pageId?: string; deltaX: number; deltaY: number }) => {
+    try {
+      const resolvedBrowserId = browserId ?? profileBrowserId("default");
+      const resolved = getPage(resolvedBrowserId, pageId);
+      const page = resolved.page;
+
+      await page.mouse.wheel(deltaX, deltaY);
+
+      return pwOk(
+        `Mouse wheel.\\n\\nBrowser ID: ${resolvedBrowserId}\\nPage ID: ${resolved.pageId}\\nDelta: (${deltaX}, ${deltaY})\\nCurrent URL: ${page.url()}`
+      );
+    } catch (error) {
+      return pwError("Failed to scroll mouse wheel", error);
+    }
+  }
+);
+if (!hasCap("vision")) browserMouseWheelTool.disable();
+
+const browserMouseDragTool = server.tool(
   "browser_mouse_drag_xy",
   "Drag left mouse button to a given position",
   {
@@ -2319,6 +2504,7 @@ server.tool(
     pageId: z.string().optional().describe("Optional Page ID (defaults to the active page)"),
     element: z
       .string()
+      .optional()
       .describe("Human-readable element description used to obtain permission to interact with the element"),
     startX: z.number().describe("Start X coordinate"),
     startY: z.number().describe("Start Y coordinate"),
@@ -2335,7 +2521,7 @@ server.tool(
   }: {
     browserId?: string;
     pageId?: string;
-    element: string;
+    element?: string;
     startX: number;
     startY: number;
     endX: number;
@@ -2359,8 +2545,9 @@ server.tool(
     }
   }
 );
+if (!hasCap("vision")) browserMouseDragTool.disable();
 
-server.tool(
+const browserStartTracingTool = server.tool(
   "browser_start_tracing",
   "Start trace recording",
   {
@@ -2384,8 +2571,9 @@ server.tool(
     }
   }
 );
+if (!hasCap("tracing")) browserStartTracingTool.disable();
 
-server.tool(
+const browserStopTracingTool = server.tool(
   "browser_stop_tracing",
   "Stop trace recording",
   {
@@ -2413,8 +2601,9 @@ server.tool(
     }
   }
 );
+if (!hasCap("tracing")) browserStopTracingTool.disable();
 
-server.tool(
+const browserVerifyElementVisibleTool = server.tool(
   "browser_verify_element_visible",
   "Verify element is visible on the page",
   {
@@ -2457,8 +2646,9 @@ server.tool(
     }
   }
 );
+if (!hasCap("testing")) browserVerifyElementVisibleTool.disable();
 
-server.tool(
+const browserVerifyTextVisibleTool = server.tool(
   "browser_verify_text_visible",
   "Verify text is visible on the page",
   {
@@ -2493,15 +2683,16 @@ server.tool(
     }
   }
 );
+if (!hasCap("testing")) browserVerifyTextVisibleTool.disable();
 
-server.tool(
+const browserVerifyListVisibleTool = server.tool(
   "browser_verify_list_visible",
-  "Verify list items are visible on the page (best-effort; `ref` treated as locator selector)",
+  "Verify list is visible on the page",
   {
     browserId: z.string().optional().describe("Browser ID (defaults to profile:default if omitted)"),
     pageId: z.string().optional().describe("Optional Page ID (defaults to the active page)"),
     element: z.string().describe("Human-readable list description"),
-    ref: z.string().describe("Target element reference; treated as a Playwright locator selector in this server"),
+    ref: z.string().describe("Exact target element reference from the page snapshot"),
     items: z.array(z.string()).describe("Items to verify"),
     timeoutMs: z.number().default(5000).describe("Timeout (milliseconds)")
   },
@@ -2524,10 +2715,22 @@ server.tool(
       const resolvedBrowserId = browserId ?? profileBrowserId("default");
       const resolved = getPage(resolvedBrowserId, pageId);
       const page = resolved.page;
-      const selector = ref?.trim();
-      if (!selector) throw new Error("ref is required");
 
-      const listLocator = page.locator(selector).first();
+      let listLocator: any;
+      try {
+        const target = await refLocator(page, { element, ref });
+        listLocator = target.locator.first();
+      } catch (e) {
+        const msg = stringifyError(e);
+        if (msg.includes("page._snapshotForAI")) {
+          const selector = ref?.trim();
+          if (!selector) throw new Error("ref is required");
+          listLocator = page.locator(selector).first();
+        } else {
+          throw e;
+        }
+      }
+
       const ok = await listLocator.waitFor({ state: "visible", timeout: timeoutMs }).then(() => true, () => false);
       if (!ok) throw new Error(`List not visible: ${element}`);
 
@@ -2545,16 +2748,17 @@ server.tool(
     }
   }
 );
+if (!hasCap("testing")) browserVerifyListVisibleTool.disable();
 
-server.tool(
+const browserVerifyValueTool = server.tool(
   "browser_verify_value",
-  "Verify element value (best-effort; `ref` treated as locator selector)",
+  "Verify element value",
   {
     browserId: z.string().optional().describe("Browser ID (defaults to profile:default if omitted)"),
     pageId: z.string().optional().describe("Optional Page ID (defaults to the active page)"),
     type: z.enum(["textbox", "checkbox", "radio", "combobox", "slider"]).describe("Type of the element"),
     element: z.string().describe("Human-readable element description"),
-    ref: z.string().describe("Target element reference; treated as a Playwright locator selector in this server"),
+    ref: z.string().describe("Exact target element reference from the page snapshot"),
     value: z.string().describe('Value to verify. For checkbox/radio, use \"true\" or \"false\".')
   },
   async ({
@@ -2576,10 +2780,22 @@ server.tool(
       const resolvedBrowserId = browserId ?? profileBrowserId("default");
       const resolved = getPage(resolvedBrowserId, pageId);
       const page = resolved.page;
-      const selector = ref?.trim();
-      if (!selector) throw new Error("ref is required");
 
-      const locator = page.locator(selector).first();
+      let locator: any;
+      try {
+        const target = await refLocator(page, { element, ref });
+        locator = target.locator.first();
+      } catch (e) {
+        const msg = stringifyError(e);
+        if (msg.includes("page._snapshotForAI")) {
+          const selector = ref?.trim();
+          if (!selector) throw new Error("ref is required");
+          locator = page.locator(selector).first();
+        } else {
+          throw e;
+        }
+      }
+
       if (type === "textbox" || type === "slider" || type === "combobox") {
         const actual = await locator.inputValue();
         if (actual !== value) throw new Error(`Expected \"${value}\", got \"${actual}\"`);
@@ -2596,6 +2812,7 @@ server.tool(
     }
   }
 );
+if (!hasCap("testing")) browserVerifyValueTool.disable();
 
 server.tool(
   "browser_run_code",
